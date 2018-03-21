@@ -2,7 +2,7 @@ pragma solidity ^0.4.4;
 
 import "./Owned.sol";
 
-contract Token is Owned {
+contract TokenIssuer is Owned {
   string public name = "Marketplace Token";
   string public symbol = "MKTT";
 
@@ -20,7 +20,7 @@ contract Token is Owned {
   event AccountFrozen(address account);
   event AccountUnfrozen(address account);
 
-  function Token() onlyOwner public {
+  function TokenIssuer() onlyOwner public {
     balanceOf[owner] = totalSupply;
   }
 
