@@ -41,20 +41,31 @@ contract Marketplace is TokenIssuer {
     uint timestamp;
   }
 
+  struct OrderCourierBid {
+    uint id;
+    uint orderId;
+    address courier;
+    uint256 price;
+    uint timestamp;
+  }
+
   uint public lastProductId = 0;
   uint public lastOfferId = 0;
   uint public lastOfferBidId = 0;
   uint public lastOrderId = 0;
+  uint public lastOrderCourierBidId = 0; 
 
   Product[] public products;
   Offer[] public offers;
   OfferBid[] public offersBid;
   Order[] public orders;
+  OrderCourierBid[] public orderCourierBids[];
 
   event ProductRegistered(uint id);
   event OfferRegistered(uint id);
   event OfferBidRegistered(uint id, uint256 totalValue);
   event OrderRegistered(uint id, uint256 totalValue);
+  event OrderCourierBidRegistered(uint id, address courier, uint256 price);
 
   event OfferBidRefused(uint id);
 
@@ -66,6 +77,11 @@ contract Marketplace is TokenIssuer {
   mapping (uint => bool) public isOfferBidRefused;
 
   mapping (address => uint256) public tokensAtStake;
+
+  mapping (uint => bool) public orderHasCourier;
+
+  mapping (uint => bool) public orderCourierBidAccepted;
+  mapping (uint => bool) public orderCourierBidRefused;
 
   function Marketplace() onlyOwner public {
     //
@@ -146,6 +162,8 @@ contract Marketplace is TokenIssuer {
     offerBid.quantity = quantity;
     offerBid.timestamp = block.timestamp;
 
+    offerAvailableQuantity[offerId] -= quantity;
+
     isOfferBidRefused[offerBid.id] = false;
     isOfferBidAccepted[offerBid.id] = false;
 
@@ -170,6 +188,8 @@ contract Marketplace is TokenIssuer {
     tokensAtStake[offerBid.bider] -= totalValue;
 
     isOfferBidRefused[offerBidId] = true;
+
+    offerAvailableQuantity[offerBid.offerId] += offerBid.quantity;
 
     emit OfferBidRefused(offerBidId);
 
@@ -206,8 +226,41 @@ contract Marketplace is TokenIssuer {
 
     emit OrderRegistered(order.id, totalValue);
 
+    orderHasCourier[order.id] = false;
+
     return order.id;
   }
 
+  function registerOrderCourierBid(uint orderId, address courier, uint256 price) onlyOwner public returns (uint) {
+    require(orderId <= orders.length);
 
+    require(price > 0);
+
+    require(balanceOf[courier] >= price);
+
+    Order memory order = orders[orderId];
+
+    require(courier != order.buyer);
+    require(courier != order.seller);
+
+    OrderCourierBid storage orderCourierBid = orderCourierBids[orderCourierBids.length];
+
+    orderCourierBid.id = lastOrderCourierBidId++;
+    orderCourierBid.orderId = orderId;
+    orderCourierBid.courier = courier;
+    orderCourierBid.price = price;
+    orderCourierBid.timestamp = block.timestamp;
+
+    balanceOf[courier] -= price;
+    balanceOf[owner] += price;
+
+    tokensAtStake[courier] += price;
+
+    OrderCourierBidRegistered(orderCourierBid.id, courier, price);
+
+    orderCourierBidAccepted[orderCourierBid.id] = false;
+    orderCourierBidRefused[orderCourierBid.id] = false;
+
+    return orderCourierBid.id;
+  }
 }
