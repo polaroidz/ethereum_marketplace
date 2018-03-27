@@ -1,8 +1,8 @@
 pragma solidity ^0.4.4;
 
-import "./TokenIssuer.sol";
+import "./DAO.sol";
 
-contract Marketplace is TokenIssuer {
+contract Marketplace is DAO {
 
   struct Product {
     uint id;
@@ -436,6 +436,12 @@ contract Marketplace is TokenIssuer {
     orderHasFinished[order.id] = true;
 
     OrderFinished(order.id);
+
+    return true;
+  }
+
+  function cancelDeliveryByCourier(uint id, address courier) onlyOwner public returns (bool) {
+    // TODO
 
     return true;
   }
