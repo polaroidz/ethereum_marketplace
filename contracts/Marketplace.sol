@@ -49,27 +49,47 @@ contract Marketplace is TokenIssuer {
     uint timestamp;
   }
 
+  struct Delivery {
+    uint id;
+    uint orderCourierBidId;
+    uint orderId;
+    address courier;
+    uint256 price;
+    uint timestamp;
+  }
+
   uint public lastProductId = 0;
   uint public lastOfferId = 0;
   uint public lastOfferBidId = 0;
   uint public lastOrderId = 0;
   uint public lastOrderCourierBidId = 0; 
+  uint public lastDeliveryId = 0;
 
   Product[] public products;
   Offer[] public offers;
   OfferBid[] public offersBid;
   Order[] public orders;
-  OrderCourierBid[] public orderCourierBids[];
+  OrderCourierBid[] public orderCourierBids;
+  Delivery[] public deliveries;
 
   event ProductRegistered(uint id);
   event OfferRegistered(uint id);
   event OfferBidRegistered(uint id, uint256 totalValue);
   event OrderRegistered(uint id, uint256 totalValue);
   event OrderCourierBidRegistered(uint id, address courier, uint256 price);
+  event DeliveryRegistered(uint id, uint orderCourierBidId, address courier, uint256 price);
 
   event OfferBidRefused(uint id);
 
   event OrderCourierBidRefused(uint id);
+
+  event OrderCourierBidAcceptedBySeller(uint id);
+  event OrderCourierBidAcceptedByBuyer(uint id);
+
+  event DeliveryConfirmedByCourier(uint id);
+  event DeliveryConfirmedByBuyer(uint id);
+
+  event OrderFinished(uint id);
 
   mapping (uint => bool) public isOfferStanding;
 
@@ -82,10 +102,19 @@ contract Marketplace is TokenIssuer {
 
   mapping (uint => bool) public orderHasCourier;
 
+  mapping (uint => bool) public orderHasFinished;
+
   mapping (uint => bool) public orderCourierBidAcceptedBySeller;
   mapping (uint => bool) public orderCourierBidAcceptedByBuyer;
 
   mapping (uint => bool) public orderCourierBidRefused;
+
+  mapping (uint => bool) public isDeliveryPending;
+
+  mapping (uint => bool) public deliveryConfirmedByCourier;
+  mapping (uint => bool) public deliveryConfirmedByBuyer;
+
+  mapping (uint => bool) public isDeliveryCancelled;
 
   function Marketplace() onlyOwner public {
     //
@@ -103,7 +132,7 @@ contract Marketplace is TokenIssuer {
     product.unitPrice = unitPrice;
     product.timestamp = block.timestamp;
 
-    emit ProductRegistered(product.id);
+    ProductRegistered(product.id);
 
     return product.id;
   }
@@ -128,7 +157,7 @@ contract Marketplace is TokenIssuer {
     offerAvailableQuantity[offer.id] = quantity;
     isOfferStanding[offer.id] = true;
 
-    emit OfferRegistered(offer.id);
+    OfferRegistered(offer.id);
 
     return offer.id;
   }
@@ -152,8 +181,7 @@ contract Marketplace is TokenIssuer {
     require(balanceOf[bider] >= totalValue);
 
     // Bider puts its money on stake so it cant start bidding withou the funds for it
-    balanceOf[bider] -= totalValue;
-    balanceOf[owner] += totalValue;
+    transferFrom(bider, owner, totalValue);
 
     tokensAtStake[bider] += totalValue; 
 
@@ -171,7 +199,7 @@ contract Marketplace is TokenIssuer {
     isOfferBidRefused[offerBid.id] = false;
     isOfferBidAccepted[offerBid.id] = false;
 
-    emit OfferBidRegistered(offerBid.id, totalValue);
+    OfferBidRegistered(offerBid.id, totalValue);
 
     return offerBid.id;
   }
@@ -186,8 +214,7 @@ contract Marketplace is TokenIssuer {
 
     uint256 totalValue = offerBid.proposedUnitPrice * offerBid.quantity;
 
-    balanceOf[owner] -= totalValue;
-    balanceOf[offerBid.bider] += totalValue;
+    transferFrom(owner, offerBid.bider, totalValue);
 
     tokensAtStake[offerBid.bider] -= totalValue;
 
@@ -195,7 +222,7 @@ contract Marketplace is TokenIssuer {
 
     offerAvailableQuantity[offerBid.offerId] += offerBid.quantity;
 
-    emit OfferBidRefused(offerBidId);
+    OfferBidRefused(offerBidId);
 
     return true;
   }
@@ -226,11 +253,11 @@ contract Marketplace is TokenIssuer {
 
     uint256 totalValue = order.agreedUnitPrice * order.quantity;
 
-    tokensAtStake[order.buyer] -= totalValue;
-
-    emit OrderRegistered(order.id, totalValue);
+    OrderRegistered(order.id, totalValue);
 
     orderHasCourier[order.id] = false;
+
+    orderHasFinished[order.id] = false;
 
     return order.id;
   }
@@ -255,8 +282,7 @@ contract Marketplace is TokenIssuer {
     orderCourierBid.price = price;
     orderCourierBid.timestamp = block.timestamp;
 
-    balanceOf[courier] -= price;
-    balanceOf[owner] += price;
+    transferFrom(courier, owner, price);
 
     tokensAtStake[courier] += price;
 
@@ -273,14 +299,14 @@ contract Marketplace is TokenIssuer {
   function refuseOrderCourierBid(uint orderCourierBidId) onlyOwner public returns (bool) {
     require(orderCourierBidId <= orderCourierBids.length);
 
-    require(!orderCourierBidAcceptedBySeller[orderCourierId] && !orderCourierBidAcceptedByBuyer[orderCourierId]);
+    require(!orderCourierBidAcceptedBySeller[orderCourierBidId]);
+    require(!orderCourierBidAcceptedByBuyer[orderCourierBidId]);
 
     OrderCourierBid memory orderCourierBid = orderCourierBids[orderCourierBidId]; 
 
     orderCourierBidRefused[orderCourierBid.id] = true;
 
-    balanceOf[orderCourierBid.courier] += orderCourierBid.price;
-    balanceOf[owner] -= orderCourierBid.price;
+    transferFrom(owner, orderCourierBid.courier, orderCourierBid.price);
 
     tokensAtStake[orderCourierBid.courier] += orderCourierBid.price;
 
@@ -288,4 +314,130 @@ contract Marketplace is TokenIssuer {
 
     return true;
   }
+
+  function acceptOrderCourierBidBySeller(uint orderCourierBidId, address seller) onlyOwner public returns (bool) {
+    require(orderCourierBidId <= orderCourierBids.length);
+
+    require(!orderCourierBidAcceptedBySeller[orderCourierBidId]);
+
+    OrderCourierBid memory orderCourierBid = orderCourierBids[orderCourierBidId]; 
+    
+    Order memory order = orders[orderCourierBid.orderId];
+
+    require(order.seller == seller);
+
+    orderCourierBidAcceptedBySeller[orderCourierBidId] = true;
+
+    OrderCourierBidAcceptedBySeller(orderCourierBidId);
+
+    return true;
+  }
+
+  function acceptOrderCourierBidByBuyer(uint orderCourierBidId, address buyer) onlyOwner public returns (bool) {
+    require(orderCourierBidId <= orderCourierBids.length);
+
+    require(!orderCourierBidAcceptedByBuyer[orderCourierBidId]);
+
+    OrderCourierBid memory orderCourierBid = orderCourierBids[orderCourierBidId]; 
+    
+    Order memory order = orders[orderCourierBid.orderId];
+
+    require(order.buyer == buyer);
+
+    orderCourierBidAcceptedByBuyer[orderCourierBidId] = true;
+
+    OrderCourierBidAcceptedByBuyer(orderCourierBidId);
+
+    return true;
+  }
+
+  function acceptOrderCourierBidByCourier(uint orderCourierBidId, address courier) onlyOwner public returns (uint) {
+    require(orderCourierBidId <= orderCourierBids.length);
+
+    require(orderCourierBidAcceptedBySeller[orderCourierBidId]);
+    require(orderCourierBidAcceptedByBuyer[orderCourierBidId]);
+
+    OrderCourierBid memory orderCourierBid = orderCourierBids[orderCourierBidId]; 
+
+    require(orderCourierBid.courier == courier);
+
+    Order memory order = orders[orderCourierBid.orderId];
+    
+    orderHasCourier[order.id] = true;
+
+    Delivery storage delivery = deliveries[deliveries.length];
+
+    delivery.id = lastDeliveryId++;
+    delivery.orderCourierBidId = orderCourierBidId;
+    delivery.orderId = order.id;
+    delivery.courier = courier;
+    delivery.price = orderCourierBid.price;
+    delivery.timestamp = block.timestamp;
+
+    DeliveryRegistered(delivery.id, orderCourierBidId, courier, delivery.price);
+
+    isDeliveryPending[delivery.id] = true;
+
+    return delivery.id;
+  }
+
+  function confirmDeliveryByCourier(uint deliveryId, address courier) onlyOwner public returns (bool) {
+    require(deliveryId <= deliveries.length);
+
+    require(isDeliveryPending[deliveryId]);
+    require(!isDeliveryCancelled[deliveryId]);
+
+    require(!deliveryConfirmedByCourier[deliveryId]);
+
+    Delivery memory delivery = deliveries[deliveryId];
+
+    require(delivery.courier == courier);
+
+    deliveryConfirmedByCourier[delivery.id] = true;
+
+    DeliveryConfirmedByCourier(delivery.id);
+
+    return true;
+  }
+
+  function confirmDeliveryByBuyer(uint deliveryId, address buyer) onlyOwner public returns (bool) {
+    require(deliveryId <= deliveries.length);
+
+    require(isDeliveryPending[deliveryId]);
+    require(!isDeliveryCancelled[deliveryId]);
+
+    require(deliveryConfirmedByCourier[deliveryId]);
+
+    require(!deliveryConfirmedByBuyer[deliveryId]);
+
+    Delivery memory delivery = deliveries[deliveryId];
+
+    Order memory order = orders[delivery.orderId];
+
+    require(order.buyer == buyer);
+
+    deliveryConfirmedByBuyer[deliveryId] = true;
+    isDeliveryPending[deliveryId] = false;
+
+    uint256 deliveryReward = delivery.price * 2;
+
+    transferFrom(owner, delivery.courier, deliveryReward);
+
+    tokensAtStake[delivery.courier] -= delivery.price;
+
+    uint256 orderTotalValue = order.agreedUnitPrice * order.quantity;
+
+    transferFrom(order.buyer, order.seller, orderTotalValue);
+
+    tokensAtStake[order.buyer] -= orderTotalValue;
+
+    DeliveryConfirmedByBuyer(delivery.id);
+
+    orderHasFinished[order.id] = true;
+
+    OrderFinished(order.id);
+
+    return true;
+  }
+
 }

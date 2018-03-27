@@ -11,7 +11,7 @@ contract Owned {
 
   modifier onlyOwner() {
     if (owner != msg.sender) {
-      emit AccessDenied(msg.sender);
+      AccessDenied(msg.sender);
       revert();
     }
     _;

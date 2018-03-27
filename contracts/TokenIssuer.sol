@@ -15,7 +15,7 @@ contract TokenIssuer is Owned {
   mapping (address => bool) public isAccountFrozen;
 
   event Transfer(address from, address to, uint256 value);
-  event Burn(address from, uint256 value);
+  event Burnt(address from, uint256 value);
 
   event AccountFrozen(address account);
   event AccountUnfrozen(address account);
@@ -38,7 +38,7 @@ contract TokenIssuer is Owned {
     balanceOf[from] -= value;
     balanceOf[to] += value;
 
-    emit Transfer(from, to, value);
+    Transfer(from, to, value);
 
     assert(balanceOf[from] + balanceOf[to] == previousBalance + value);
 
@@ -59,7 +59,7 @@ contract TokenIssuer is Owned {
     balanceOf[from] -= value;
     totalSupply -= value;
     
-    emit Burn(from, value);
+    Burnt(from, value);
 
     return true;
   }
@@ -67,7 +67,7 @@ contract TokenIssuer is Owned {
   function freezeAccount(address account) onlyOwner public returns (bool) {
     isAccountFrozen[account] = true;
 
-    emit AccountFrozen(account);
+    AccountFrozen(account);
 
     return true;
   }
@@ -75,7 +75,7 @@ contract TokenIssuer is Owned {
   function unfreezeAccount(address account) onlyOwner public returns (bool) {
     isAccountFrozen[account] = false;
 
-    emit AccountUnfrozen(account);
+    AccountUnfrozen(account);
 
     return true;
   }
