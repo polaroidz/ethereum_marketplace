@@ -120,7 +120,7 @@ contract Marketplace is DAO {
     //
   }
 
-  function registerProductFrom(address owner, string name, uint256 unitPrice) public returns (uint) {
+  function registerProductFrom(address owner, string name, uint256 unitPrice) onlyOwner public returns (uint) {
     require(!isAccountFrozen[owner]);
     require(unitPrice > 0);
 
@@ -137,7 +137,7 @@ contract Marketplace is DAO {
     return product.id;
   }
 
-  function registerOfferFrom(address seller, uint productId, uint256 proposedUnitPrice, uint quantity) public returns (uint) {
+  function registerOfferFrom(address seller, uint productId, uint256 proposedUnitPrice, uint quantity) onlyOwner public returns (uint) {
     require(!isAccountFrozen[seller]);
     require(productId <= products.length);
     
