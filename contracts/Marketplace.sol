@@ -69,6 +69,8 @@ contract Marketplace is TokenIssuer {
 
   event OfferBidRefused(uint id);
 
+  event OrderCourierBidRefused(uint id);
+
   mapping (uint => bool) public isOfferStanding;
 
   mapping (uint => uint) public offerAvailableQuantity;
@@ -80,7 +82,9 @@ contract Marketplace is TokenIssuer {
 
   mapping (uint => bool) public orderHasCourier;
 
-  mapping (uint => bool) public orderCourierBidAccepted;
+  mapping (uint => bool) public orderCourierBidAcceptedBySeller;
+  mapping (uint => bool) public orderCourierBidAcceptedByBuyer;
+
   mapping (uint => bool) public orderCourierBidRefused;
 
   function Marketplace() onlyOwner public {
@@ -258,9 +262,30 @@ contract Marketplace is TokenIssuer {
 
     OrderCourierBidRegistered(orderCourierBid.id, courier, price);
 
-    orderCourierBidAccepted[orderCourierBid.id] = false;
+    orderCourierBidAcceptedBySeller[orderCourierBid.id] = false;
+    orderCourierBidAcceptedByBuyer[orderCourierBid.id] = false;
+
     orderCourierBidRefused[orderCourierBid.id] = false;
 
     return orderCourierBid.id;
+  }
+
+  function refuseOrderCourierBid(uint orderCourierBidId) onlyOwner public returns (bool) {
+    require(orderCourierBidId <= orderCourierBids.length);
+
+    require(!orderCourierBidAcceptedBySeller[orderCourierId] && !orderCourierBidAcceptedByBuyer[orderCourierId]);
+
+    OrderCourierBid memory orderCourierBid = orderCourierBids[orderCourierBidId]; 
+
+    orderCourierBidRefused[orderCourierBid.id] = true;
+
+    balanceOf[orderCourierBid.courier] += orderCourierBid.price;
+    balanceOf[owner] -= orderCourierBid.price;
+
+    tokensAtStake[orderCourierBid.courier] += orderCourierBid.price;
+
+    OrderCourierBidRefused(orderCourierBid.id);
+
+    return true;
   }
 }
