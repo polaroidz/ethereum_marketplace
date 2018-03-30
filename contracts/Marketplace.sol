@@ -2,8 +2,12 @@ pragma solidity ^0.4.4;
 
 import "./DAO.sol";
 
+// Contrato que define o funcionamento do marketplace na
+// plataforma.
 contract Marketplace is DAO {
 
+  // Estrutura responsável por armazenar dados dos produtos
+  // cadastrados.
   struct Product {
     uint id;
     address owner;
@@ -12,6 +16,11 @@ contract Marketplace is DAO {
     uint timestamp;
   }
 
+  // Estrutura responsável por armazenar dados das ofertas
+  // criadas pelos vendedores em cima dos produtos cadastrados
+  // por eles. A oferta é iniciada com um valor de unidade
+  // proposto, porém esse valor pode ser mudado durante o 
+  // leilão realizado em cima da mesma.
   struct Offer {
     uint id;
     uint productId;
@@ -21,6 +30,10 @@ contract Marketplace is DAO {
     uint timestamp;
   }
 
+  // Estrutura responsável por armazenar dados das propostas
+  // em cima das ofertas anunciadas na plataforma. Cada proposta
+  // possui um valor unitário proposto em cima da quantidade
+  // de unidades a serem compradas.
   struct OfferBid {
     uint id;
     uint offerId;
@@ -30,6 +43,8 @@ contract Marketplace is DAO {
     uint timestamp;
   }
 
+  // Estrutura responsável por armazenar dados dos pedidos
+  // realizados quando uma oferta é aceita pelo vendedor.
   struct Order {
     uint id;
     uint offerBidId;
@@ -120,14 +135,14 @@ contract Marketplace is DAO {
     //
   }
 
-  function registerProductFrom(address owner, string name, uint256 unitPrice) onlyOwner public returns (uint) {
-    require(!isAccountFrozen[owner]);
+  function registerProductFrom(address _owner, string name, uint256 unitPrice) onlyOwner public returns (uint) {
+    require(!isAccountFrozen[_owner]);
     require(unitPrice > 0);
 
-    Product storage product = products[products.length];
+    Product storage product = products[products.length++];
 
     product.id = lastProductId++;
-    product.owner = owner;
+    product.owner = _owner;
     product.name = name;
     product.unitPrice = unitPrice;
     product.timestamp = block.timestamp;
